@@ -1,2 +1,2 @@
-# photoscripts
-My collection of photography related scripts
+This is my collection of photography scripts.
+

@@ -1,0 +1,591 @@
+./wb_encode.sh "nyy000000000GBBBGBBBG" "109040"
+#!/bin/sh
+for f in *.NEF
+do
+	ufraw-batch --embedded-image "$f" --exif --overwrite --output "$f.JPG"
+done
+
+for f in *.JPG
+do
+    convert "$f" -geometry 50% -quality 80% "small_$f"
+done
+
+fname_nef="$1"
+fname_jpg=`echo "$1" | cut -f 1 -d .`.JPG
+ufraw-batch "$fname_nef" --overwrite --embedded-image --output=$fname_jpg
+#!/bin/sh
+for f in *.NEF
+do
+    ls -l "$f"
+    ./fswb2jpg.sh "$f"
+done
+mkdir fswb_jpg
+mv *.jpg ./fswb_jpg/
+
+#!/bin/sh
+mkdir ufwb
+for f in *.NEF
+do
+    ls -l "$f"
+    ./cols.sh "$f"
+done
+
+#!/bin/sh
+#ufraw-batch --output=1.ppm --out-depth=8 --overwrite $1
+fname=`echo "$1" | cut -f 1 -d .`.tiff
+fname2=`echo "$1" | cut -f 1 -d .`.jpg
+dcraw -a -T $1
+convert $fname -quality 95 $fname2
+rm -f $fname
+
+#!/bin/sh
+fname_nef="$1"
+fname_jpg=`echo "ufwb/$1" | cut -f 1 -d .`.JPG
+ufraw-batch --wb=auto --exposure=auto --restore=lch --clip=film --wavelet-denoising-threshold=50 --interpolation=bilinear --color-smoothing "$fname_nef" --out-type=jpg --compression=80 --overwrite --output="$fname_jpg"
+
+#!/bin/sh
+mkdir opthist
+for f in *.NEF
+do
+    ls -l "$f"
+    ./opt.sh "$f" "nhy000000000LaaaLaaaL" "109050"
+done
+
+#!/bin/sh
+mkdir wbjpg
+for f in *.NEF
+do
+    ls -l "$f"
+    ./wbchmix.sh "$f" "$1" "$2"
+done
+
+#!/bin/sh
+fname_nef="$1"
+fname_jpg1="out.jpeg"
+fname_jpg2=`echo "wbjpg/$1" | cut -f 1 -d .`.jpg
+ufraw-batch --embedded-image --overwrite --output "$fname_jpg1" "$1"
+jpegwb "$fname_jpg1" "$fname_jpg2" "$2" "$3"
+rm -f "$fname_jpg1"
+
+#!/bin/sh
+mkdir ufen
+for f in *.JPG
+do
+    ./ufen.sh "$f"
+done
+
+#!/bin/sh
+mkdir ufwb
+for f in *.NEF
+do
+    ./ufwb.sh "$f"
+done
+
+./wb_encode.sh "yyy00JE0EJ00e0OE0EO0e" "208040"
+#!/bin/sh
+mkdir ufbw
+for f in *.JPG
+do
+    ./ufbw.sh "$f"
+done
+
+fname_nef="$1"
+fname_jpg1=`echo "ufwb/col_$1" | cut -f 1 -d .`.JPG
+fname_jpg2=`echo "ufwb/bw_$1" | cut -f 1 -d .`.JPG
+ufraw-batch "$fname_nef" --overwrite --embedded-image --output=out.jpeg
+maxbw out.jpeg "$fname_jpg1" 0 1 2
+maxbw out.jpeg "$fname_jpg2"
+rm out.jpeg
+#!/bin/sh
+#dcraw -o 0 -D -g 1 1 -r 1 1 1 1 -6 -T "$1"
+dcraw -g 1 1 -j -t 0 -o 0 -D -r 1 1 1 1 -T -6 "$1"
+
+#!/bin/sh
+umount -f /Volumes/ramdisk/
+diskutil erasevolume HFS+ 'ramdisk' `hdiutil attach -nomount ram://819200`
+mkdir mbw
+for f in *.[jJ][pP]*
+do 
+    maxbw "$f" "mbw/$f"
+done
+
+#!/bin/sh
+fname_nef="$1"
+fname_jpg1="out.jpeg"
+fname_jpg2=`echo "wbjpg/$1" | cut -f 1 -d .`.jpg
+ufraw-batch --embedded-image --overwrite --output "$fname_jpg1" "$1"
+gimp -f -i -d -b "(define (aceq-image filename-in filename-out) (let* ((image (car (gimp-file-load RUN-NONINTERACTIVE filename-in \"\"))) (drawable (car (gimp-image-active-drawable image)))) (gimp-levels-stretch drawable) (gimp-file-save RUN-NONINTERACTIVE image drawable filename-out \"\"))) (aceq-image \"$fname_jpg1\" \"$fname_jpg2\")" -b "(gimp-quit 0)"
+#jpegwb "$fname_jpg1" "$fname_jpg2" "$2" "$3"
+rm -f "$fname_jpg1"
+#!/bin/sh
+for f in _ZZZ*.JPG
+do
+    echo "$f"
+    ./res1.sh "$f"
+done
+
+#!/bin/sh
+out="`echo "out_$1" | cut -d'.' -f1`.avi"
+#mencoder "$1" -oac lavc -ovc lavc -lavcopts acodec=ac3:abitrate=128:vcodec=mpeg4:vqmin=3:vqmax=10:vhq:vbitrate=6000 -o "out_$1"
+#mencoder "$1" -oac pcm -ovc lavc -lavcopts acodec=vorbis:vcodec=mpeg4 -o "out_$1"
+#ffmpeg -i "$1" -f mp4 -vcodec h264 -mbd 2 -qmin 3 -qmax 10 -acodec mp3 "$out"
+ffmpeg -i "$1" -vcodec mpeg4 -mbd 2 -vqmin 3 -vqmax 10 -acodec mp3 -b:a 128k -b:v 6000k -f avi "$out"
+#!/bin/sh
+fname_1="$1"
+fname_2=`echo "ufbw/$1" | cut -f 1 -d .`.JPG
+maxbw "$fname_1" "$fname_2" 1 3 1
+
+#!/bin/sh
+convert "$1" -geometry 50% "resized_$1"
+
+#!/bin/sh
+fname_nef="$1"
+fname_png=`echo "$1" | cut -f 1 -d .`.png
+fname_jpg=`echo "$1" | cut -f 1 -d .`.jpg
+ufraw-batch --wb=auto --restore=hsv --wavelet-denoising-threshold=50 --exposure=auto --linearity=0.10 --interpolation=ahd --saturation=1.0 --out-type=png --out-depth=16 --overwrite --output "$fname_png" "$fname_nef"
+#gimp -f -i -d -b "(define (aceq-image filename-in filename-out) (let* ((image (car (gimp-file-load RUN-NONINTERACTIVE filename-in \"\"))) (drawable (car (gimp-image-active-drawable image)))) (gimp-levels-stretch drawable) (plug-in-colors-channel-mixer RUN-NONINTERACTIVE image drawable FALSE 1 0 0 0 1 0 1 0 0) (gimp-file-save RUN-NONINTERACTIVE image drawable filename-out \"\"))) (aceq-image \"$fname_png\" \"$fname_jpg\")" -b "(gimp-quit 0)"
+gimp -f -i -d -b "(define (aceq-image filename-in filename-out) (let* ((image (car (gimp-file-load RUN-NONINTERACTIVE filename-in \"\"))) (drawable (car (gimp-image-active-drawable image)))) (gimp-levels-stretch drawable) (gimp-file-save RUN-NONINTERACTIVE image drawable filename-out \"\"))) (aceq-image \"$fname_png\" \"$fname_jpg\")" -b "(gimp-quit 0)"
+rm -f "$fname_png"
+#!/bin/sh
+fname_1="$1"
+fname_2=`echo "ufen/$1" | cut -f 1 -d .`.JPG
+maxbw "$fname_1" "$fname_2" 0 3 2
+
+#!/bin/sh
+mkdir mbw
+for f in *.NEF
+do
+    ls -l "$f"
+    ./mbw.sh "$f"
+done
+
+#!/bin/sh
+#mencoder "$1" -o "$1.avi" -oac mp3lame -ovc lavc -lameopts q=6:vbr=2 -lavcopts vcodec=mpeg4:vhq:vbitrate=3500 -fps 27.0 -ofps 30.0
+mencoder "$1" -o "$1.avi" -oac mp3lame -ovc lavc -lameopts q=8:vbr=2 -lavcopts vcodec=mpeg4:vhq:vbitrate=6666
+ls -l "$1"
+ls -l "$1.avi"
+#rm -f "$1"
+
+#!/bin/sh
+mencoder "$1" -o "$1.avi" -oac mp3lame -ovc lavc -lameopts q=6:vbr=2 -lavcopts vcodec=mpeg4:vhq:vbitrate=4000 -fps 59.94 -ofps 60.0
+
+#!/bin/sh
+for f in *.NEF
+do
+    ls -l "$f"
+    ./nef2jpg.sh "$f"
+done
+mkdir jpg
+mv *.jpg ./jpg/
+
+#!/bin/sh
+for f in *.NEF
+do
+    ls -l "$f"
+    ./fsnef2jpg.sh "$f"
+done
+mkdir fsjpg
+mv *.jpg ./fsjpg/
+
+#!/bin/sh
+mkdir ufwb
+for f in *.NEF
+do
+    ls -l "$f"
+    ./ufwb.sh "$f"
+done
+
+#!/bin/sh
+for f in *.MOV
+do
+    ./d600mfsvid.sh "$f"
+done
+#!/bin/sh
+fname_nef="$1"
+fname_jpg1="out.jpeg"
+fname_jpg2=`echo "opthist/$1" | cut -f 1 -d .`.jpg
+ufraw-batch --embedded-image --overwrite --output "$fname_jpg1" "$1"
+jpegwb "$fname_jpg1" "$fname_jpg2" "$2" "$3"
+rm -f "$fname_jpg1"
+
+./wb_encode.sh "yyy00JE0EJ00NbbbNbbbN" "059550"
+#!/bin/sh
+fname_nef="$1"
+fname_jpg1="out.jpeg"
+fname_jpg2=`echo "mbw/$1" | cut -f 1 -d .`.jpg
+ufraw-batch --embedded-image --overwrite --output "$fname_jpg1" "$1"
+maxbw "$fname_jpg1" "$fname_jpg2"
+rm -f "$fname_jpg1"
+
+#!/bin/sh
+fname_nef="$1"
+fname_tif1="/Volumes/ramdisk/temp1.tif"
+fname_tif2="/Volumes/ramdisk/temp2.tif"
+fname_jpg=`echo "$1" | cut -f 1 -d .`.jpg
+ufraw-batch --wb=auto --restore=hsv --wavelet-denoising-threshold=50 --exposure=auto --linearity=0.10 --interpolation=ahd --saturation=1.0 --out-type=tiff --out-depth=16 --overwrite --output "$fname_tif1" "$fname_nef"
+tiffwb16 "$fname_tif1" "$fname_tif2"
+convert "$fname_tif2" "$fname_jpg"
+rm -f "$fname_tif1" "$fname_tif2"
+
+#!/bin/sh
+#mencoder "$1" -o "$1.avi" -oac mp3lame -ovc lavc -lameopts q=6:vbr=2 -lavcopts vcodec=mpeg4:vhq:vbitrate=1500 -ofps 30.0
+mencoder "$1" -o "$1.avi" -oac mp3lame -ovc lavc -lameopts q=7:vbr=2 -lavcopts vcodec=mpeg4:vhq -ofps 25.0
+
+#!/bin/sh
+#pwcview -hkr -s vga -f 30 
+pwcview -hkr -s vga -f 25 -q 80 | mencoder -really-quiet -demuxer rawvideo -rawvideo fps=25:w=640:h=480:i420 - -ovc lavc -lavcopts vcodec=mpeg4:vhq:vbitrate=1200 -o $1
+
+#!/bin/sh
+dcraw -v -4 -o 0 -D -t 0 -k 0 -H 1 -T "$1"
+#!/bin/sh
+mencoder "$1" -o "$1.avi" -oac mp3lame -ovc lavc -lameopts q=6:vbr=2 -lavcopts vcodec=mpeg4:vhq:vbitrate=450 -fps 27.0 -ofps 30.0
+
+#!/bin/sh
+#pwcview -hkr -s vga -f 30 
+pwcview -hkr -s qsif -f 5 -q 50 | mencoder -really-quiet -demuxer rawvideo -rawvideo fps=5:w=160:h=120:i420 - -ovc lavc -lavcopts vcodec=mpeg4:vhq:vbitrate=15 -o $1
+
+#!/bin/sh
+echo "usage invert.sh file_in fps"
+rm 00*.jpeg audio.mp2 audio2.mp2 flist.txt
+ffmpeg -i "$1" %08d.jpeg audio.mp2
+find . -name "0*.jpeg" > flist.txt
+inv_fns flist.txt
+rm flist.txt
+sox audio.mp2 audio2.mp2 reverse
+rm audio.mp2
+ffmpeg -r $2 -b 2000k -i %08d.jpeg -i audio2.mp2 "inv_$1"
+rm 00*.jpeg audio2.mp2
+for f in 00*.jpeg; do rm -f $f; done
+
+#!/bin/sh
+#pwcview -hkr -s vga -f 30 
+pwcview -hkr -s sif -f 10 -q 60 | mencoder -really-quiet -demuxer rawvideo -rawvideo fps=10:w=320:h=240:i420 - -ovc lavc -lavcopts vcodec=mpeg4:vhq:vbitrate=80 -o $1
+
+#!/bin/sh
+echo "usage invert.sh file_in fps"
+rm audio.mp2 audio2.mp2 flist.txt
+for f in 00*.png; do rm -f $f; done
+ffmpeg -i "$1" %08d.png -ab 128k audio.mp2
+find . -name "00*.png" > flist.txt
+inv_fns flist.txt png
+rm flist.txt
+sox audio.mp2 audio2.mp2 reverse
+rm audio.mp2
+ffmpeg -r $2 -i %08d.png -i audio2.mp2 -ab 128k -b:v 1800k "inv_$1"
+rm audio2.mp2
+for f in 0*.png; do rm -f $f; done
+echo "All done"
+
+#!/bin/sh
+mkdir ./jpeg 2>/dev/null
+tiff_file=`echo $1 | cut -f 1 -d .`.tiff
+tiff2_file="out_$tiff_file"
+tmp=`echo $1 | cut -f 1 -d .`.jpeg
+jpeg_file="./jpeg/$tmp"
+./dcraw.sh "$1"
+./tdf "$tiff_file"
+./convert.sh "$tiff2_file" "$jpeg_file"
+rm -f "$tiff_file" "$tiff2_file"
+ls -l "$jpeg_file"
+#!/bin/sh
+out="`echo "out_$1" | cut -d'.' -f1`.avi"
+#mencoder "$1" -oac lavc -ovc lavc -lavcopts acodec=ac3:abitrate=128:vcodec=mpeg4:vqmin=3:vqmax=10:vhq:vbitrate=6000 -o "out_$1"
+#mencoder "$1" -oac pcm -ovc lavc -lavcopts acodec=vorbis:vcodec=mpeg4 -o "out_$1"
+#ffmpeg -i "$1" -f mp4 -vcodec h264 -mbd 2 -qmin 3 -qmax 10 -acodec mp3 "$out"
+ffmpeg -i "$1" -vcodec mpeg4 -mbd 2 -vqmin 3 -vqmax 10 -acodec mp3 -b:a 128k -b:v 6000k -f avi "$out"
+#!/bin/sh
+#mencoder "$1" -o "$1.avi" -oac mp3lame -ovc lavc -lameopts q=6:vbr=2 -lavcopts vcodec=mpeg4:vhq:vbitrate=1500 -ofps 30.0
+#mencoder "$1" -o "$1.avi" -oac mp3lame -ovc lavc -lameopts q=6:vbr=2 -lavcopts vcodec=mpeg4:vhq:vbitrate=2700 -ofps 24.0
+ffmpeg -threads 2 -i "$1" -y -c:v mpeg4 -c:a mp2 -b:v 2200k -b:a 64k -r 29 "$1.avi"
+
+#!/bin/sh
+#pwcview -hkr -s vga -f 30 
+pwcview -hkr -s vga -f 30 -q 90 | mencoder -really-quiet -demuxer rawvideo -rawvideo fps=30:w=640:h=480:i420 - -ovc lavc -lavcopts vcodec=mpeg4:vhq:vbitrate=3000 -o $1
+
+mencoder -vf scale=640:480 -ofps 25 ????.avi -o merged.avi -ovc lavc -oac mp3lame -lavcopts vcodec=mpeg4:vbitrate=2000:vhq -lameopts q=6 
+#!/bin/sh
+#pwcview -hkr -s vga -f 30 
+pwcview -hkr -s sif -f 10 -q 70 | mencoder -really-quiet -demuxer rawvideo -rawvideo fps=10:w=320:h=240:i420 - -ovc lavc -lavcopts vcodec=mpeg4:vhq:vbitrate=100 -o $1
+
+#!/bin/sh
+#pwcview -hkr -s vga -f 30 
+pwcview -hkr -s cif -f 15 -q 70 | mencoder -really-quiet -demuxer rawvideo -rawvideo fps=15:w=352:h=288:i420 - -ovc lavc -lavcopts vcodec=mpeg4:vhq:vbitrate=300 -o $1
+
+mencoder $1 -o $2 -oac mp3lame -ovc lavc -vf scale=640:360 -lameopts q=9:vbr=2 -lavcopts vcodec=mpeg4:vhq:vbitrate=400
+#!/bin/sh
+#mencoder "$1" -o "$1.avi" -oac mp3lame -ovc lavc -lameopts q=6:vbr=2 -lavcopts vcodec=mpeg4:vhq:vbitrate=1500 -ofps 30.0
+mencoder "$1" -o "$1.avi" -oac mp3lame -ovc lavc -lameopts q=6:vbr=2 -lavcopts vcodec=mpeg4:vhq:vbitrate=4000 -fps 27.0 -ofps 30.0
+
+#!/bin/sh
+# convert "$1" -type grayscale -normalize 1 -quality 94% -depth 8 "$2"
+# convert "$1" -type grayscale -auto-gamma -linear-stretch 1%x2% -quality 94% -depth 8 "$2"
+convert "$1" -type grayscale -gamma 2.3 -linear-stretch 2%x3% -quality 94% -depth 8 "$2"
+echo 'usage pars: infile partnum from len'
+mencoder -ovc lavc -oac copy -lavcopts vcodec=mpeg4:vbitrate=10000:vhq $1 -o parts/$2.avi -ss $3 -endpos $4
+#!/bin/sh
+echo "usage invert.sh file_in fps"
+ffmpeg -i "$1" %08d.png -ab 128k audio.mp2
+find . -name "00*.png" > flist.txt
+inv_fns flist.txt png
+sox audio.mp2 audio2.mp2 reverse
+ffmpeg -r $2 -i %08d.png -i audio2.mp2 -ab 128k -b:v 1800k "inv_$1"
+echo "All done safe, remove unneeded files"
+
+#!/bin/sh
+for f in *.MOV
+do
+    ./d600mfsvid.sh "$f"
+done
+#!/bin/sh
+rm *.jpeg
+rm result.avi spy.mp3 spy.avi
+mixer mic 100
+mixer rec 100
+pwcsnap -s vga -k -f 5 -q 85 -c $1 -o ./%s.jpeg -i 1000 &
+AUDIODRIVER=oss rec -b 16 -r 16000 -c 1 -t mp3 spy.mp3 trim 0 $1
+sleep 1
+mencoder  "mf://*.[jJ][pP]*[gG]" -mf fps=1 -o spy.avi -ovc lavc -lavcopts vcodec=mpeg4:vhq:vbitrate=200 -ofps 1.0
+ffmpeg -i spy.mp3 -i spy.avi result.avi
+rm *.jpeg
+rm spy.mp3 spy.avi
+file result.avi
+ls -l result.avi
+
+#!/bin/sh
+echo "usage invert.sh file_in fps"
+rm 00*.bmp 00*.jpeg audio.mp2 audio2.mp2 flist.txt
+ffmpeg  -i "$1" %08d.bmp -ab 128k audio.mp2
+for f in 0*.bmp
+do
+    convert -quality 100 $f `echo $f | cut -f 1 -d .`.jpeg
+    rm $f
+    echo "Converted $f"
+done
+find . -name "0*.jpeg" > flist.txt
+inv_fns flist.txt
+rm flist.txt
+sox audio.mp2 audio2.mp2 reverse
+rm audio.mp2
+ffmpeg -r $2 -b:v 2000k -i %08d.jpeg -i audio2.mp2 "inv_$1"
+rm 00*.jpeg audio2.mp2
+for f in 00*.jpeg; do rm -f $f; done
+
+#!/bin/sh
+mplayer -shuffle -loop 0 -playlist list.pls
+
+mencoder "$1" -o "$2" -ss $3 -endpos $4 -vf scale=640:360 -oac mp3lame -ovc lavc -lameopts q=8:vbr=2 -lavcopts vcodec=mpeg4:vhq:vbitrate=666:vqmin=8
+
+./wb_encode.sh "nyy000000000GBBBGBBBG" "109040"
+#!/bin/sh
+mencoder "$1" -o "$1.avi" -oac mp3lame -ovc lavc -lameopts q=9:vbr=2 -lavcopts vcodec=mpeg4:vhq
+
+mencoder  "mf://*.[jJ][pP]*[gG]" -mf fps=5 -vf scale=800:500 -o all.avi -ovc lavc -lavcopts vcodec=mpeg4
+fname_nef="$1"
+fname_jpg=`echo "$1" | cut -f 1 -d .`.JPG
+ufraw-batch "$fname_nef" --overwrite --embedded-image --output=$fname_jpg
+#!/bin/sh
+for f in *.NEF
+do
+    ls -l "$f"
+    ./fswb2jpg.sh "$f"
+done
+mkdir fswb_jpg
+mv *.jpg ./fswb_jpg/
+
+#!/bin/sh
+mkdir ufwb
+for f in *.NEF
+do
+    ls -l "$f"
+    ./cols.sh "$f"
+done
+
+#!/bin/sh
+#ufraw-batch --output=1.ppm --out-depth=8 --overwrite $1
+fname=`echo "$1" | cut -f 1 -d .`.tiff
+fname2=`echo "$1" | cut -f 1 -d .`.jpg
+dcraw -a -T $1
+convert $fname -quality 95 $fname2
+rm -f $fname
+
+#!/bin/sh
+fname_nef="$1"
+fname_jpg=`echo "ufwb/$1" | cut -f 1 -d .`.JPG
+ufraw-batch --wb=auto --exposure=auto --restore=lch --clip=film --wavelet-denoising-threshold=50 --interpolation=bilinear --color-smoothing "$fname_nef" --out-type=jpg --compression=80 --overwrite --output="$fname_jpg"
+
+gimp -f -i -d -b "(define (aceq-image filename-in filename-out) (let* ((image (car (gimp-file-load RUN-NONINTERACTIVE filename-in \"\"))) (drawable (car (gimp-image-active-drawable image)))) (plug-in-c-astretch RUN-NONINTERACTIVE image drawable) (gimp-levels-stretch drawable) (plug-in-colors-channel-mixer RUN-NONINTERACTIVE image drawable FALSE -1.0 0.0 2.0 -0.5 2.0 -0.5 2.0 0.0 -1.0) (gimp-file-save RUN-NONINTERACTIVE image drawable filename-out \"\"))) (aceq-image \"$1\" \"$2\")" -b "(gimp-quit 0)"
+#!/bin/sh
+mencoder "$1" -o "$1.avi" -oac mp3lame -ovc lavc -lameopts q=9:vbr=2 -lavcopts vcodec=mpeg4:vhq -ofps 10.0
+
+mkdir color_fjpeg
+for f in SAM_*
+do
+    ./sambwfjpeg.sh "$f" "color_fjpeg/$f"
+    ls -l "color_fjpeg/$f"
+done
+
+#!/bin/sh
+mkdir opthist
+for f in *.NEF
+do
+    ls -l "$f"
+    ./opt.sh "$f" "nhy000000000LaaaLaaaL" "109050"
+done
+
+#!/bin/sh
+mkdir wbjpg
+for f in *.NEF
+do
+    ls -l "$f"
+    ./wbchmix.sh "$f" "$1" "$2"
+done
+
+#!/bin/sh
+fname_nef="$1"
+fname_jpg1="out.jpeg"
+fname_jpg2=`echo "wbjpg/$1" | cut -f 1 -d .`.jpg
+ufraw-batch --embedded-image --overwrite --output "$fname_jpg1" "$1"
+jpegwb "$fname_jpg1" "$fname_jpg2" "$2" "$3"
+rm -f "$fname_jpg1"
+
+mkdir color
+for f in SAM_*
+do
+    ./gimp_sambw.sh "$f" "color/$f"
+    ls -l "color/$f"
+done
+
+#!/bin/sh
+mkdir ufwb
+for f in *.NEF
+do
+    ./ufwb.sh "$f"
+done
+
+./wb_encode.sh "yyy00JE0EJ00e0OE0EO0e" "208040"
+#!/bin/sh
+fjpeg "$2" udfi1 2 "$1" -q90
+fname_nef="$1"
+fname_jpg1=`echo "ufwb/col_$1" | cut -f 1 -d .`.JPG
+fname_jpg2=`echo "ufwb/bw_$1" | cut -f 1 -d .`.JPG
+ufraw-batch "$fname_nef" --overwrite --embedded-image --output=out.jpeg
+maxbw out.jpeg "$fname_jpg1" 0 1 2
+maxbw out.jpeg "$fname_jpg2"
+rm out.jpeg
+#!/bin/sh
+#dcraw -o 0 -D -g 1 1 -r 1 1 1 1 -6 -T "$1"
+dcraw -g 1 1 -j -t 0 -o 0 -D -r 1 1 1 1 -T -6 "$1"
+
+#!/bin/sh
+umount -f /Volumes/ramdisk/
+diskutil erasevolume HFS+ 'ramdisk' `hdiutil attach -nomount ram://819200`
+mkdir mbw
+for f in *.[jJ][pP]*
+do 
+    maxbw "$f" "mbw/$f"
+done
+
+#!/bin/sh
+fname_nef="$1"
+fname_jpg1="out.jpeg"
+fname_jpg2=`echo "wbjpg/$1" | cut -f 1 -d .`.jpg
+ufraw-batch --embedded-image --overwrite --output "$fname_jpg1" "$1"
+gimp -f -i -d -b "(define (aceq-image filename-in filename-out) (let* ((image (car (gimp-file-load RUN-NONINTERACTIVE filename-in \"\"))) (drawable (car (gimp-image-active-drawable image)))) (gimp-levels-stretch drawable) (gimp-file-save RUN-NONINTERACTIVE image drawable filename-out \"\"))) (aceq-image \"$fname_jpg1\" \"$fname_jpg2\")" -b "(gimp-quit 0)"
+#jpegwb "$fname_jpg1" "$fname_jpg2" "$2" "$3"
+rm -f "$fname_jpg1"
+#!/bin/sh
+#mencoder "$1" -o "$1.avi" -oac mp3lame -ovc lavc -lameopts q=6:vbr=2 -lavcopts vcodec=mpeg4:vhq:vbitrate=1500 -ofps 30.0
+#mencoder "$1" -o "$1.avi" -oac mp3lame -ovc lavc -lameopts q=6:vbr=2 -lavcopts vcodec=mpeg4:vhq:vbitrate=2700 -ofps 24.0
+ffmpeg -threads 2 -i "$1" -y -c:v mpeg4 -c:a mp2 -b:v 2200k -b:a 64k -r 29 "$1.avi"
+
+#!/bin/sh
+fname_nef="$1"
+fname_png=`echo "$1" | cut -f 1 -d .`.png
+fname_jpg=`echo "$1" | cut -f 1 -d .`.jpg
+ufraw-batch --wb=auto --restore=hsv --wavelet-denoising-threshold=50 --exposure=auto --linearity=0.10 --interpolation=ahd --saturation=1.0 --out-type=png --out-depth=16 --overwrite --output "$fname_png" "$fname_nef"
+#gimp -f -i -d -b "(define (aceq-image filename-in filename-out) (let* ((image (car (gimp-file-load RUN-NONINTERACTIVE filename-in \"\"))) (drawable (car (gimp-image-active-drawable image)))) (gimp-levels-stretch drawable) (plug-in-colors-channel-mixer RUN-NONINTERACTIVE image drawable FALSE 1 0 0 0 1 0 1 0 0) (gimp-file-save RUN-NONINTERACTIVE image drawable filename-out \"\"))) (aceq-image \"$fname_png\" \"$fname_jpg\")" -b "(gimp-quit 0)"
+gimp -f -i -d -b "(define (aceq-image filename-in filename-out) (let* ((image (car (gimp-file-load RUN-NONINTERACTIVE filename-in \"\"))) (drawable (car (gimp-image-active-drawable image)))) (gimp-levels-stretch drawable) (gimp-file-save RUN-NONINTERACTIVE image drawable filename-out \"\"))) (aceq-image \"$fname_png\" \"$fname_jpg\")" -b "(gimp-quit 0)"
+rm -f "$fname_png"
+mencoder mvi_1951.mov -o zimna_kapiel.avi -oac mp3lame -ovc lavc -vf scale=640:360 -lameopts q=7:vbr=2 -lavcopts vcodec=mpeg4:vhq:vbitrate=750
+#!/bin/sh
+find . -name "*.[aA][vV][iI]" -exec ./encode.sh "{}" \;
+
+#!/bin/sh
+mkdir mbw
+for f in *.NEF
+do
+    ls -l "$f"
+    ./mbw.sh "$f"
+done
+
+#!/bin/sh
+#mencoder "$1" -o "$1.avi" -oac mp3lame -ovc lavc -lameopts q=6:vbr=2 -lavcopts vcodec=mpeg4:vhq:vbitrate=3500 -fps 27.0 -ofps 30.0
+mencoder "$1" -o "$1.avi" -oac mp3lame -ovc lavc -lameopts q=8:vbr=2 -lavcopts vcodec=mpeg4:vhq:vbitrate=6666
+ls -l "$1"
+ls -l "$1.avi"
+#rm -f "$1"
+
+mencoder $1 -o $2 -oac mp3lame -ovc lavc -vf scale=640:360 -lameopts q=9:vbr=2 -lavcopts vcodec=mpeg4:vhq:vbitrate=650
+#!/bin/sh
+mencoder "$1" -o "$1.avi" -oac mp3lame -ovc lavc -lameopts q=6:vbr=2 -lavcopts vcodec=mpeg4:vhq:vbitrate=4000 -fps 59.94 -ofps 60.0
+
+#!/bin/sh
+for f in *.NEF
+do
+    ls -l "$f"
+    ./nef2jpg.sh "$f"
+done
+mkdir jpg
+mv *.jpg ./jpg/
+
+#!/bin/sh
+for f in *.NEF
+do
+    ls -l "$f"
+    ./fsnef2jpg.sh "$f"
+done
+mkdir fsjpg
+mv *.jpg ./fsjpg/
+
+#!/bin/sh
+#mencoder "$1" -o "$1.avi" -oac mp3lame -ovc lavc -lameopts q=6:vbr=2 -lavcopts vcodec=mpeg4:vhq:vbitrate=1500 -ofps 30.0
+mencoder "$1" -o "$1.avi" -oac mp3lame -ovc lavc -lameopts q=9:vbr=2 -lavcopts vcodec=mpeg4:vhq:vbitrate=300 -fps 11.0 -ofps 30.0
+#mencoder "$1" -o "$1.avi" -oac copy -ovc lavc -lavcopts vcodec=mpeg4:vhq
+#mencoder "$1" -o "$1.avi" -oac mp3lame -ovc copy -lameopts q=9:vbr=2
+#mencoder "$1" -o "$1.avi" -oac copy -ovc copy
+
+#!/bin/sh
+mkdir ufwb
+for f in *.NEF
+do
+    ls -l "$f"
+    ./ufwb.sh "$f"
+done
+
+#!/bin/sh
+fname_nef="$1"
+fname_jpg1="out.jpeg"
+fname_jpg2=`echo "opthist/$1" | cut -f 1 -d .`.jpg
+ufraw-batch --embedded-image --overwrite --output "$fname_jpg1" "$1"
+jpegwb "$fname_jpg1" "$fname_jpg2" "$2" "$3"
+rm -f "$fname_jpg1"
+
+./wb_encode.sh "yyy00JE0EJ00NbbbNbbbN" "059550"
+#!/bin/sh
+fname_nef="$1"
+fname_jpg1="out.jpeg"
+fname_jpg2=`echo "mbw/$1" | cut -f 1 -d .`.jpg
+ufraw-batch --embedded-image --overwrite --output "$fname_jpg1" "$1"
+maxbw "$fname_jpg1" "$fname_jpg2"
+rm -f "$fname_jpg1"
+
+#!/bin/sh
+fname_nef="$1"
+fname_tif1="/Volumes/ramdisk/temp1.tif"
+fname_tif2="/Volumes/ramdisk/temp2.tif"
+fname_jpg=`echo "$1" | cut -f 1 -d .`.jpg
+ufraw-batch --wb=auto --restore=hsv --wavelet-denoising-threshold=50 --exposure=auto --linearity=0.10 --interpolation=ahd --saturation=1.0 --out-type=tiff --out-depth=16 --overwrite --output "$fname_tif1" "$fname_nef"
+tiffwb16 "$fname_tif1" "$fname_tif2"
+convert "$fname_tif2" "$fname_jpg"
+rm -f "$fname_tif1" "$fname_tif2"
+
