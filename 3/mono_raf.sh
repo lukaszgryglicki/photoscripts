@@ -40,7 +40,7 @@ fi
 if [ ! -z "${AVIF}" ]
 then
   avif=`echo "$1" | cut -f 1 -d .`.avif
-  convert "${tif}" -contrast-stretch "${CONTRAST}" -gamma "${GAMMA}" -depth 12 -quality "${QUALITY}" "${avif}" || exit 4
+  convert "${tif}" -contrast-stretch "${CONTRAST}" -gamma "${GAMMA}" -depth 16 -quality "${QUALITY}" "${avif}" || exit 4
 fi
 if [ ! -z "${PNG}" ]
 then
