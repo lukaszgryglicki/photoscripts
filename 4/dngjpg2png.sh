@@ -3,12 +3,14 @@
 # Usage: ./dng2png_match.sh xyz [abc ...]    # looks for xyz.DNG and xyz.JPG; writes xyz.png
 # COMPRESS=''|'oxipng'|'optipng'             # set to choose PNG optimizer; default: none
 # NR=1                                       # set to enable noise reduction; default: off
+# NOSHARP=1                                  # set to disable unsharp mask; default: on
 set -eo pipefail
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "Missing dependency: $1" >&2; exit 2; }; }
 
 # Always needed
 need magick
+need vips
 need exiftool
 need identify
 need rawtherapee-cli
@@ -72,12 +74,8 @@ for base in "$@"; do
   if [ -z "${NR}" ]
   then
     # Partial PP3 to *disable* all sharpening / NR (overlay on top of AMTC profile)
-    ovr_pp3="$tmpdir/noNR-noSharpen.pp3"
-    cat > "$ovr_pp3" <<'PP3'
-[Sharpening]
-Enabled=false
-[PostDemosaicSharpening]
-Enabled=false
+    no_nr_pp3="$tmpdir/noNR.pp3"
+    cat > "$no_nr_pp3" <<'PP3'
 [Directional Pyramid Denoising]
 Enabled=false
 [Impulse Denoising]
@@ -85,17 +83,34 @@ Enabled=false
 PP3
   fi
 
+  # Force NO demosaic (Mono) for monochrome RAW; keeps photosite detail, no RGB interpolation
+  no_demosaic_pp3="$tmpdir/noDemosaic.pp3"
+  cat > "$no_demosaic_pp3" <<'PP3'
+[RAW Bayer]
+Method=mono
+[RAW]
+CA=false
+HotPixelFilter=false
+DeadPixelFilter=false
+PP3
+
   outdir="$tmpdir/rt"; mkdir -p "$outdir"
   echo "[info] Using RawTherapee profile: $PP3"
   if [ -z "${NR}" ]
   then
-    rawtherapee-cli -b16 -tz -o "$outdir" -p "$PP3" -p "$ovr_pp3" -Y -c "$DNG"
+    rawtherapee-cli -b16 -tz -o "$outdir" -p "$PP3" -p "$no_demosaic_pp3" -p "$no_nr_pp3" -Y -c "$DNG"
   else
-    rawtherapee-cli -b16 -tz -o "$outdir" -p "$PP3" -Y -c "$DNG"
+    rawtherapee-cli -b16 -tz -o "$outdir" -p "$PP3" -p "$no_demosaic_pp3" -Y -c "$DNG"
   fi
   tiff="$(find "$outdir" -type f \( -name '*.tif' -o -name '*.tiff' \) | head -n1)"
   [ -z "${tiff:-}" ] && { echo "[fail] Could not produce TIFF for ${base}"; rm -rf "$tmpdir"; continue; }
   echo "[ok] Produced intermediate TIFF ${tiff}"
+  identify -quiet "$tiff"
+  # Collapse RT's 3 identical channels to a true single-channel 16‑bit TIFF
+  vips extract_band "$tiff" "$tmpdir/rt_gray.v" 0
+  vips cast "$tmpdir/rt_gray.v" "$tmpdir/rt_gray16.tif" ushort
+  tiff="$tmpdir/rt_gray16.tif"
+  echo "[ok] Collapsed to single-channel ${tiff}"
   identify -quiet "$tiff"
 
   # LG: hard part
@@ -125,16 +140,15 @@ PP3
   echo "[ok] Tone guided by JPG -> ${matched_tiff}"
 
   # 3) Write 16-bit single-channel PNG and max-compress
-  echo "[info] Writing final PNG ${out_png} ..."
-  if [ -z "${NR}" ]
+  if [ -z "$NOSHARP" ]
   then
-    magick -quiet "$matched_tiff" -colorspace Gray -alpha off \
-        -define png:color-type=0 -define png:bit-depth=16 -define png:compression-level=9 \
-        -strip "${out_png}"
+    magick -quiet "$matched_tiff" -unsharp 0x0.8+0.8+2% -colorspace Gray -alpha off \
+      -define png:color-type=0 -define png:bit-depth=16 -define png:compression-level=9 \
+      -strip "${out_png}"
   else
-    magick -quiet "$matched_tiff" -unsharp 0x0.7+0.75+0 -colorspace Gray -alpha off \
-        -define png:color-type=0 -define png:bit-depth=16 -define png:compression-level=9 \
-        -strip "${out_png}"
+    magick -quiet "$matched_tiff" -colorspace Gray -alpha off \
+      -define png:color-type=0 -define png:bit-depth=16 -define png:compression-level=9 \
+      -strip "${out_png}"
   fi
   echo "[ok] Wrote ${out_png}"
   identify -quiet "$out_png"
