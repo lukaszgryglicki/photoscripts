@@ -39,10 +39,33 @@ if [ "$#" -lt 1 ]; then
   exit 1
 fi
 
-export OMP_NUM_THREADS="$(nproc)"
+NPROC="$(nproc)"
+echo "[info] Using ${NPROC} threads"
+export OMP_NUM_THREADS="${NPROC}"
+export MAGICK_THREAD_LIMIT="${NPROC}"
+export VIPS_CONCURRENCY="${NPROC}"
 export VIPS_WARNING=0
 
-for base in "$@"; do
+# Normalize arguments: if any item already has .DNG/.JPG/.JPEG (any case), strip the extension.
+declare -A _seen_bases=()
+norm_args=()
+for arg in "$@"; do
+  b="$arg"
+  # strip known photo extensions (any case)
+  for ext in DNG dng JPG jpg JPEG jpeg Jpg Jpeg PNG png; do
+    case "$b" in
+      *.$ext) b="${b%.*}"; break;;
+    esac
+  done
+  # deduplicate basenames while preserving order
+  if [[ -z "${_seen_bases[$b]+x}" ]]; then
+    norm_args+=("$b")
+    _seen_bases["$b"]=1
+  fi
+done
+
+for base in "${norm_args[@]}"
+do
   # Resolve DNG (case-insensitive)
   DNG=""; for ext in DNG dng; do [ -e "${base}.${ext}" ] && DNG="${base}.${ext}" && break; done
   [ -z "$DNG" ] && { echo "[skip] No DNG for ${base}"; continue; }
@@ -71,6 +94,7 @@ for base in "$@"; do
     continue
   fi
   mkdir -p "$tmpdir"
+
   if [ -z "${NR}" ]
   then
     # Partial PP3 to *disable* all sharpening / NR (overlay on top of AMTC profile)
@@ -117,24 +141,24 @@ PP3
   # 2) Tone-guide from JPG (hint only): estimate gamma + gain/offset from stats, keep full 16-bit range
   echo "[info] Guiding tones from ${JPG} (gamma + gain/offset)…"
   ref_gray="$tmpdir/ref-gray.png"
-  magick -quiet "$JPG" -colorspace Gray -alpha off -define png:color-type=0 -define png:bit-depth=16 "${ref_gray}"
+  magick -limit thread "$NPROC" -quiet "$JPG" -colorspace Gray -alpha off -define png:color-type=0 -define png:bit-depth=16 "${ref_gray}"
   identify -quiet "$ref_gray"
   # Stats (normalized 0..1)
-  SRC_MEAN=$(magick -quiet "$tiff" -colorspace Gray -alpha off -define png:color-type=0 -define png:bit-depth=16 -format "%[fx:mean]" info:)
-  SRC_STD=$(magick -quiet "$tiff" -colorspace Gray -alpha off -define png:color-type=0 -define png:bit-depth=16 -format "%[fx:standard_deviation]" info:)
-  REF_MEAN=$(magick -quiet "$ref_gray" -format "%[fx:mean]" info:)
-  REF_STD=$(magick -quiet "$ref_gray" -format "%[fx:standard_deviation]" info:)
+  SRC_MEAN=$(magick -limit thread "$NPROC" -quiet "$tiff" -colorspace Gray -alpha off -define png:color-type=0 -define png:bit-depth=16 -format "%[fx:mean]" info:)
+  SRC_STD=$(magick -limit thread "$NPROC" -quiet "$tiff" -colorspace Gray -alpha off -define png:color-type=0 -define png:bit-depth=16 -format "%[fx:standard_deviation]" info:)
+  REF_MEAN=$(magick -limit thread "$NPROC" -quiet "$ref_gray" -format "%[fx:mean]" info:)
+  REF_STD=$(magick -limit thread "$NPROC" -quiet "$ref_gray" -format "%[fx:standard_deviation]" info:)
   # Compute exponent a for y = x^a to align midtones approximately
   GAMMA=$(awk -v r="$REF_MEAN" -v s="$SRC_MEAN" 'BEGIN{e=1e-6; if(s<e)s=e; if(r<e)r=e; g=log(r)/log(s); if(g<0.4)g=0.4; if(g>2.5)g=2.5; print g}')
   echo "[info] src_mean=$SRC_MEAN ref_mean=$REF_MEAN -> gamma(exponent)=$GAMMA"
   # Apply gamma in 16-bit, then compute gain/offset to match global contrast & mean
-  magick -quiet "$tiff" -colorspace Gray -alpha off -evaluate Pow "$GAMMA" "$tmpdir/gamma.tif"
-  G_MEAN=$(magick -quiet "$tmpdir/gamma.tif" -colorspace Gray -alpha off -define png:color-type=0 -define png:bit-depth=16 -format "%[fx:mean]" info:)
-  G_STD=$(magick -quiet "$tmpdir/gamma.tif" -colorspace Gray -alpha off -define png:color-type=0 -define png:bit-depth=16 -format "%[fx:standard_deviation]" info:)
+  magick -limit thread "$NPROC" -quiet "$tiff" -colorspace Gray -alpha off -evaluate Pow "$GAMMA" "$tmpdir/gamma.tif"
+  G_MEAN=$(magick -limit thread "$NPROC" -quiet "$tmpdir/gamma.tif" -colorspace Gray -alpha off -define png:color-type=0 -define png:bit-depth=16 -format "%[fx:mean]" info:)
+  G_STD=$(magick -limit thread "$NPROC" -quiet "$tmpdir/gamma.tif" -colorspace Gray -alpha off -define png:color-type=0 -define png:bit-depth=16 -format "%[fx:standard_deviation]" info:)
   SCALE=$(awk -v rr="$REF_STD" -v ss="$G_STD" 'BEGIN{e=1e-12; if(ss<e)ss=e; s=rr/ss; if(s<0.5)s=0.5; if(s>2.0)s=2.0; print s}')
   OFFSET=$(awk -v rm="$REF_MEAN" -v sm="$G_MEAN" -v sc="$SCALE" 'BEGIN{ off=rm - sc*sm; print off }')
   echo "[info] gamma_mean=$G_MEAN ref_std=$REF_STD gamma_std=$G_STD -> scale=$SCALE offset=$OFFSET"
-  magick -quiet "$tmpdir/gamma.tif" -evaluate Multiply "$SCALE" -evaluate Add "$OFFSET" -clamp -colorspace Gray -alpha off "$tmpdir/tone.tif"
+  magick -limit thread "$NPROC" -quiet "$tmpdir/gamma.tif" -evaluate Multiply "$SCALE" -evaluate Add "$OFFSET" -clamp -colorspace Gray -alpha off "$tmpdir/tone.tif"
   matched_tiff="$tmpdir/tone.tif"
   identify -quiet "$matched_tiff"
   echo "[ok] Tone guided by JPG -> ${matched_tiff}"
@@ -142,11 +166,11 @@ PP3
   # 3) Write 16-bit single-channel PNG and max-compress
   if [ -z "$NOSHARP" ]
   then
-    magick -quiet "$matched_tiff" -unsharp 0x0.8+0.8+2% -colorspace Gray -alpha off \
+    magick -limit thread "$NPROC" -quiet "$matched_tiff" -unsharp 0x0.8+0.8+2% -colorspace Gray -alpha off \
       -define png:color-type=0 -define png:bit-depth=16 -define png:compression-level=9 \
       -strip "${out_png}"
   else
-    magick -quiet "$matched_tiff" -colorspace Gray -alpha off \
+    magick -limit thread "$NPROC" -quiet "$matched_tiff" -colorspace Gray -alpha off \
       -define png:color-type=0 -define png:bit-depth=16 -define png:compression-level=9 \
       -strip "${out_png}"
   fi
@@ -160,7 +184,7 @@ PP3
   if [ "${COMPRESS}" = "oxipng" ]
   then
     echo "[info] Optimizing PNG with oxipng ..."
-    oxipng -o max --zopfli --strip all "$out_png"
+    oxipng --threads "$NPROC" -o max --zopfli --strip all "$out_png"
     echo "[ok] Optimized ${out_png} with oxipng"
     identify -quiet "$out_png"
   fi
